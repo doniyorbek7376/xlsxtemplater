@@ -1,0 +1,129 @@
+package xlsxtemplater
+
+import (
+	"bytes"
+	"fmt"
+	"text/template"
+
+	"codeberg.org/tealeg/xlsx/v4"
+)
+
+func (f *File) render(file *xlsx.File, content any, templateFunctions template.FuncMap) error {
+	for _, sheetNode := range f.Sheets {
+		sheet, err := file.AddSheet(sheetNode.Name)
+		if err != nil {
+			return err
+		}
+
+		err = sheetNode.render(sheet, content, templateFunctions)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (n *Sheet) render(sheet *xlsx.Sheet, content any, templateFunctions template.FuncMap) error {
+	// copy old sheet column
+	n.sheet.Cols.ForEach(func(idx int, col *xlsx.Col) {
+		newCol := xlsx.Col{}
+		style := col.GetStyle()
+		newCol.SetStyle(style)
+		newCol.Width = col.Width
+		newCol.CustomWidth = col.CustomWidth
+		newCol.Hidden = col.Hidden
+		newCol.Collapsed = col.Collapsed
+		newCol.Min = col.Min
+		newCol.Max = col.Max
+
+		sheet.Cols.Add(&newCol)
+	})
+
+	for _, node := range n.Nodes {
+		render(sheet, node, content, templateFunctions)
+	}
+
+	return nil
+}
+
+func render(sheet *xlsx.Sheet, node Node, content any, templateFunctions template.FuncMap) {
+	switch node := node.(type) {
+	case *Row:
+		renderRow(sheet, node, content)
+	case *Range:
+		renderRange(sheet, node, content, templateFunctions)
+	case *Condition:
+		renderCondition(sheet, node, content, templateFunctions)
+	}
+}
+
+func renderRange(sheet *xlsx.Sheet, node *Range, content any, templateFunctions template.FuncMap) {
+	items := extractSlice(content, node.Expr)
+
+	for _, item := range items {
+		for _, child := range node.Body {
+			render(sheet, child, item, templateFunctions)
+		}
+	}
+}
+
+func renderCondition(sheet *xlsx.Sheet, node *Condition, content any, templateFunctions template.FuncMap) {
+	var nodes []Node
+	if checkCondition(node.Expr, content, templateFunctions) {
+		nodes = node.Body
+	} else {
+		nodes = node.Else
+	}
+
+	for _, child := range nodes {
+		render(sheet, child, content, templateFunctions)
+	}
+}
+
+func checkCondition(expr string, content any, templateFunctions template.FuncMap) bool {
+	checkerTemplate := fmt.Sprintf("{{ %s }}", expr)
+
+	tmpl, err := template.New("checker").
+		Funcs(templateFunctions).
+		Parse(checkerTemplate)
+	if err != nil {
+		return false
+	}
+
+	buf := bytes.NewBuffer(nil)
+
+	err = tmpl.Execute(buf, content)
+
+	return buf.String() == "true"
+}
+
+func renderRow(sheet *xlsx.Sheet, row *Row, content any) {
+	newRow := sheet.AddRow()
+	newRow.SetHeight(row.row.GetHeight())
+
+	for _, cell := range row.Cells {
+		newCell := newRow.AddCell()
+
+		cloneCell(newCell, cell.cell)
+		for i := 0; i < newCell.HMerge; i++ {
+			row.row.AddCell()
+		}
+
+		newCell.Merge(newCell.HMerge, newCell.VMerge)
+
+		newCell.SetValue(cell.GetValue(content))
+	}
+}
+
+func cloneCell(to, from *xlsx.Cell) {
+	to.HMerge = from.HMerge
+	to.VMerge = from.VMerge
+	to.Hidden = from.Hidden
+	to.SetStyle(from.GetStyle())
+	to.Value = from.Value
+	to.SetFormula(from.Formula())
+	to.NumFmt = from.NumFmt
+
+	to.SetHyperlink(from.Hyperlink.Link, from.Hyperlink.DisplayString, from.Hyperlink.Tooltip)
+}
