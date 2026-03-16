@@ -1,7 +1,6 @@
 package xlsxtemplater
 
 import (
-	"fmt"
 	"maps"
 	"text/template"
 
@@ -35,8 +34,6 @@ func GenerateWithOptions(templatePath string, content any, generatedFilePath str
 	if err != nil {
 		return err
 	}
-
-	fmt.Println(parsed.Sheets[0].Repr())
 
 	renderedFile := xlsx.NewFile()
 

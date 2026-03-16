@@ -33,6 +33,8 @@ func parseSheet(sheet *xlsx.Sheet, templateFunctions template.FuncMap) (*Sheet, 
 	sheetNode := &Sheet{Name: sheet.Name, sheet: sheet}
 	parentStack := []ParentNode{sheetNode}
 
+	emptyRows := []*Row{}
+
 	rowIndex := 0
 	sheet.ForEachRow(func(row *xlsx.Row) error {
 		rowIndex++
@@ -73,6 +75,12 @@ func parseSheet(sheet *xlsx.Sheet, templateFunctions template.FuncMap) (*Sheet, 
 		}
 
 		if isEnd(row) {
+			currentParent := lastParent(parentStack)
+			for _, emptyRow := range emptyRows {
+				currentParent.AddChild(emptyRow)
+			}
+
+			emptyRows = emptyRows[:0]
 			parentStack = parentStack[:len(parentStack)-1]
 
 			return nil
@@ -107,7 +115,22 @@ func parseSheet(sheet *xlsx.Sheet, templateFunctions template.FuncMap) (*Sheet, 
 			return nil
 		})
 
-		parentStack[len(parentStack)-1].AddChild(rowNode)
+		if len(rowNode.Cells) == 0 {
+			emptyRows = append(emptyRows, rowNode)
+
+			return nil
+		}
+
+		currentParent := lastParent(parentStack)
+
+		for _, emptyRow := range emptyRows {
+			currentParent.AddChild(emptyRow)
+		}
+
+		emptyRows = emptyRows[:0]
+
+		currentParent.AddChild(rowNode)
+
 		return nil
 	})
 
