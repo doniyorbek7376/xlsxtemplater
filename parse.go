@@ -141,6 +141,7 @@ func parseRow(row *xlsx.Row, rowIndex int, templateFunctions template.FuncMap) *
 	}
 
 	columnIndex := 1
+	emptyCells := []*Cell{}
 	row.ForEachCell(func(cell *xlsx.Cell) error {
 		cellName := getCellName(columnIndex, rowIndex)
 
@@ -163,7 +164,14 @@ func parseRow(row *xlsx.Row, rowIndex int, templateFunctions template.FuncMap) *
 		}
 
 		if cell.Value != "" {
+			for _, emptyCell := range emptyCells {
+				rowNode.Cells = append(rowNode.Cells, emptyCell)
+			}
+			emptyCells = emptyCells[:0]
+
 			rowNode.Cells = append(rowNode.Cells, cellNode)
+		} else {
+			emptyCells = append(emptyCells, cellNode)
 		}
 
 		columnIndex += 1 + cell.HMerge
