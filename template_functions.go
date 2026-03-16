@@ -21,15 +21,7 @@ func getDefaultTemplateFunctions() template.FuncMap {
 		"multiply": func(a any, b any) float64 {
 			return parseFloat(a) * parseFloat(b)
 		},
-		"format_date": func(a, oldLayout, newLayout string) string {
-			if len(a) > len(oldLayout) {
-				a = a[:len(oldLayout)]
-			}
-
-			time, _ := time.Parse(oldLayout, a)
-
-			return time.Format(newLayout)
-		},
+		"format_date":   FormatDate,
 		"to_number":     parseFloat,
 		"format_number": FormatNumberForExcel,
 	}

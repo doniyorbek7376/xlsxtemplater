@@ -3,6 +3,7 @@ package main
 import (
 	"math/rand"
 	"strings"
+	"time"
 
 	"github.com/doniyorbek7376/xlsxtemplater"
 )
@@ -15,6 +16,7 @@ func main() {
 			"name":     randomName(),
 			"price":    rand.Float64() * 10000,
 			"quantity": rand.Float64() * 10,
+			"date":     time.Now().AddDate(0, 0, -1*rand.Intn(365)).Format(time.DateOnly),
 		})
 	}
 
@@ -26,7 +28,7 @@ func main() {
 	}
 
 	err := xlsxtemplater.Generate(
-		"template2.xlsx",
+		"template.xlsx",
 		content,
 		"generated.xlsx",
 	)

@@ -40,89 +40,9 @@ func parseSheet(sheet *xlsx.Sheet, templateFunctions template.FuncMap) (*Sheet, 
 	sheet.ForEachRow(func(row *xlsx.Row) error {
 		rowIndex++
 
-		if expr, ok := getRangeExpr(row); ok {
-			rangeNode := &Range{
-				Expr: expr,
-			}
+		rowNode := parseRow(row, rowIndex, templateFunctions)
 
-			lastParent(parentStack).AddChild(rangeNode)
-
-			parentStack = append(parentStack, rangeNode)
-
-			return nil
-		}
-
-		if expr, ok := getIfExpr(row); ok {
-			conditionNode := &Condition{
-				Expr: expr,
-			}
-
-			lastParent(parentStack).AddChild(conditionNode)
-
-			parentStack = append(parentStack, conditionNode)
-
-			return nil
-		}
-
-		if isElse(row) {
-			parent := lastParent(parentStack)
-
-			if parent, ok := parent.(*Condition); ok {
-				parent.elseFound = true
-			}
-
-			return nil
-
-		}
-
-		if isEnd(row) {
-			currentParent := lastParent(parentStack)
-			for _, emptyRow := range emptyRows {
-				currentParent.AddChild(emptyRow)
-			}
-
-			emptyRows = emptyRows[:0]
-			parentStack = parentStack[:len(parentStack)-1]
-
-			return nil
-		}
-
-		rowNode := &Row{
-			Index: rowIndex,
-			row:   row,
-		}
-
-		columnIndex := 1
-		row.ForEachCell(func(cell *xlsx.Cell) error {
-			cellName := getCellName(columnIndex, rowIndex)
-
-			cellNode := &Cell{
-				CellName: cellName,
-				Col:      columnIndex,
-				Raw:      cell.Value,
-				cell:     cell,
-			}
-
-			if strings.Contains(cell.Value, "{{") {
-				tmpl, err := template.New(cellName).
-					Funcs(templateFunctions).
-					Parse(cell.Value)
-				if err != nil {
-					println("warning: cannot parse template: " + cellName + " " + err.Error())
-				}
-
-				cellNode.Template = tmpl
-			}
-
-			if cell.Value != "" {
-				rowNode.Cells = append(rowNode.Cells, cellNode)
-			}
-
-			columnIndex += 1 + cell.HMerge
-			return nil
-		})
-
-		if len(rowNode.Cells) == 0 {
+		if rowNode.IsEmpty {
 			emptyRows = append(emptyRows, rowNode)
 
 			return nil
@@ -136,12 +56,125 @@ func parseSheet(sheet *xlsx.Sheet, templateFunctions template.FuncMap) (*Sheet, 
 
 		emptyRows = emptyRows[:0]
 
+		if rowNode.IsRange {
+			rangeNode := &Range{
+				Expr: rowNode.Expr,
+			}
+
+			currentParent.AddChild(rangeNode)
+
+			parentStack = append(parentStack, rangeNode)
+
+			return nil
+		}
+
+		if rowNode.IsIf {
+			conditionNode := &Condition{
+				Expr: rowNode.Expr,
+			}
+
+			currentParent.AddChild(conditionNode)
+
+			parentStack = append(parentStack, conditionNode)
+
+			return nil
+		}
+
+		if rowNode.IsElse {
+			if currentParent, ok := currentParent.(*Condition); ok {
+				currentParent.elseFound = true
+			}
+
+			return nil
+
+		}
+
+		if rowNode.IsEnd {
+			for _, emptyRow := range emptyRows {
+				currentParent.AddChild(emptyRow)
+			}
+
+			emptyRows = emptyRows[:0]
+			parentStack = parentStack[:len(parentStack)-1]
+
+			return nil
+		}
+
 		currentParent.AddChild(rowNode)
 
 		return nil
 	})
 
 	return sheetNode, nil
+}
+
+func parseRow(row *xlsx.Row, rowIndex int, templateFunctions template.FuncMap) *Row {
+	rowNode := &Row{
+		Index: rowIndex,
+		row:   row,
+	}
+
+	if expr, ok := getRangeExpr(row); ok {
+		rowNode.Expr = expr
+		rowNode.IsRange = true
+
+		return rowNode
+	}
+
+	if expr, ok := getIfExpr(row); ok {
+		rowNode.Expr = expr
+		rowNode.IsIf = true
+
+		return rowNode
+	}
+
+	if isElse(row) {
+		rowNode.IsElse = true
+
+		return rowNode
+	}
+
+	if isEnd(row) {
+		rowNode.IsEnd = true
+
+		return rowNode
+	}
+
+	columnIndex := 1
+	row.ForEachCell(func(cell *xlsx.Cell) error {
+		cellName := getCellName(columnIndex, rowIndex)
+
+		cellNode := &Cell{
+			CellName: cellName,
+			Col:      columnIndex,
+			Raw:      cell.Value,
+			cell:     cell,
+		}
+
+		if strings.Contains(cell.Value, "{{") {
+			tmpl, err := template.New(cellName).
+				Funcs(templateFunctions).
+				Parse(cell.Value)
+			if err != nil {
+				println("warning: cannot parse template: " + cellName + " " + err.Error())
+			}
+
+			cellNode.Template = tmpl
+		}
+
+		if cell.Value != "" {
+			rowNode.Cells = append(rowNode.Cells, cellNode)
+		}
+
+		columnIndex += 1 + cell.HMerge
+		return nil
+	})
+
+	if len(rowNode.Cells) == 0 {
+		rowNode.IsEmpty = true
+	}
+
+	return rowNode
 }
 
 func lastParent(stack []ParentNode) ParentNode {

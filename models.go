@@ -51,8 +51,14 @@ func (n *Sheet) AddChild(child Node) {
 }
 
 type Row struct {
-	Index int
-	Cells []*Cell
+	Index   int
+	Cells   []*Cell
+	IsRange bool
+	IsEmpty bool
+	IsEnd   bool
+	IsIf    bool
+	IsElse  bool
+	Expr    string
 
 	row *xlsx.Row
 }
