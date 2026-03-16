@@ -27,11 +27,12 @@ func main() {
 		"items": items,
 	}
 
-	err := xlsxtemplater.Generate(
-		"template.xlsx",
-		content,
-		"generated.xlsx",
-	)
+	template, err := xlsxtemplater.ParseTemplate("template2.xlsx")
+	if err != nil {
+		panic(err)
+	}
+
+	err = template.Render(content, "generated.xlsx")
 	if err != nil {
 		panic(err)
 	}
