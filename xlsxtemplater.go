@@ -1,6 +1,7 @@
 package xlsxtemplater
 
 import (
+	"fmt"
 	"maps"
 	"text/template"
 
@@ -10,7 +11,6 @@ import (
 type Options struct {
 	CustomFuncMap template.FuncMap
 }
-
 
 // Generate opens xlsx template from templatePath, renders with given content
 // and writes a generated file to generatedFilePath.
@@ -35,6 +35,8 @@ func GenerateWithOptions(templatePath string, content any, generatedFilePath str
 	if err != nil {
 		return err
 	}
+
+	fmt.Println(parsed.Sheets[0].Repr())
 
 	renderedFile := xlsx.NewFile()
 

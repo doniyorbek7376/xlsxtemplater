@@ -113,10 +113,20 @@ func checkCondition(expr string, content any, templateFunctions template.FuncMap
 
 func renderRow(sheet *xlsx.Sheet, row *Row, content any) {
 	newRow := sheet.AddRow()
-	newRow.SetHeight(row.row.GetHeight())
+	height := row.row.GetHeight()
+	if height != 0 {
+		newRow.SetHeight(height)
+	}
 
+	columnIndex := 1
 	for _, cell := range row.Cells {
+		for cell.Col > columnIndex {
+			newRow.AddCell()
+			columnIndex++
+		}
+
 		newCell := newRow.AddCell()
+		columnIndex++
 
 		cloneCell(newCell, cell.cell)
 		for i := 0; i < newCell.HMerge; i++ {
@@ -133,7 +143,10 @@ func cloneCell(to, from *xlsx.Cell) {
 	to.HMerge = from.HMerge
 	to.VMerge = from.VMerge
 	to.Hidden = from.Hidden
-	to.SetStyle(from.GetStyle())
+	style := from.GetStyle()
+	if style != nil {
+		to.SetStyle(style)
+	}
 	to.Value = from.Value
 	to.SetFormula(from.Formula())
 	to.NumFmt = from.NumFmt

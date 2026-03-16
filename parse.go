@@ -33,8 +33,10 @@ func parseSheet(sheet *xlsx.Sheet, templateFunctions template.FuncMap) (*Sheet, 
 	sheetNode := &Sheet{Name: sheet.Name, sheet: sheet}
 	parentStack := []ParentNode{sheetNode}
 
-	rowIndex := 1
+	rowIndex := 0
 	sheet.ForEachRow(func(row *xlsx.Row) error {
+		rowIndex++
+
 		if expr, ok := getRangeExpr(row); ok {
 			rangeNode := &Range{
 				Expr: expr,
@@ -91,13 +93,15 @@ func parseSheet(sheet *xlsx.Sheet, templateFunctions template.FuncMap) (*Sheet, 
 				println("warning: cannot parse template: " + cellName + " " + err.Error())
 			}
 
-			rowNode.Cells = append(rowNode.Cells, &Cell{
-				CellName: cellName,
-				Col:      columnIndex,
-				Raw:      cell.Value,
-				Template: tmpl,
-				cell:     cell,
-			})
+			if cell.Value != "" {
+				rowNode.Cells = append(rowNode.Cells, &Cell{
+					CellName: cellName,
+					Col:      columnIndex,
+					Raw:      cell.Value,
+					Template: tmpl,
+					cell:     cell,
+				})
+			}
 
 			columnIndex += 1 + cell.HMerge
 			return nil
