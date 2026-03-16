@@ -26,7 +26,7 @@ func main() {
 	}
 
 	err := xlsxtemplater.Generate(
-		"template.xlsx",
+		"template2.xlsx",
 		content,
 		"generated.xlsx",
 	)

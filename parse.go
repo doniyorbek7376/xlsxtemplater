@@ -3,6 +3,7 @@ package xlsxtemplater
 import (
 	"fmt"
 	"regexp"
+	"strings"
 	"text/template"
 
 	"codeberg.org/tealeg/xlsx/v4"
@@ -94,21 +95,27 @@ func parseSheet(sheet *xlsx.Sheet, templateFunctions template.FuncMap) (*Sheet, 
 		columnIndex := 1
 		row.ForEachCell(func(cell *xlsx.Cell) error {
 			cellName := getCellName(columnIndex, rowIndex)
-			tmpl, err := template.New(cellName).
-				Funcs(templateFunctions).
-				Parse(cell.Value)
-			if err != nil {
-				println("warning: cannot parse template: " + cellName + " " + err.Error())
+
+			cellNode := &Cell{
+				CellName: cellName,
+				Col:      columnIndex,
+				Raw:      cell.Value,
+				cell:     cell,
+			}
+
+			if strings.Contains(cell.Value, "{{") {
+				tmpl, err := template.New(cellName).
+					Funcs(templateFunctions).
+					Parse(cell.Value)
+				if err != nil {
+					println("warning: cannot parse template: " + cellName + " " + err.Error())
+				}
+
+				cellNode.Template = tmpl
 			}
 
 			if cell.Value != "" {
-				rowNode.Cells = append(rowNode.Cells, &Cell{
-					CellName: cellName,
-					Col:      columnIndex,
-					Raw:      cell.Value,
-					Template: tmpl,
-					cell:     cell,
-				})
+				rowNode.Cells = append(rowNode.Cells, cellNode)
 			}
 
 			columnIndex += 1 + cell.HMerge
