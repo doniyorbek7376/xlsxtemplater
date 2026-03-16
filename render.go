@@ -133,6 +133,7 @@ func renderRow(sheet *xlsx.Sheet, row *Row, content any) {
 		cloneCell(newCell, cell.cell)
 		for i := 0; i < newCell.HMerge; i++ {
 			row.row.AddCell()
+			columnIndex++
 		}
 
 		newCell.Merge(newCell.HMerge, newCell.VMerge)
