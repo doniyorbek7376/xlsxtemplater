@@ -4,10 +4,17 @@ import (
 	"bytes"
 	"fmt"
 	"strings"
+	"sync"
 	"text/template"
 
 	"codeberg.org/tealeg/xlsx/v4"
 )
+
+var bufferPool = sync.Pool{
+	New: func() interface{} {
+		return &bytes.Buffer{}
+	},
+}
 
 type NodeType int
 
@@ -64,14 +71,21 @@ func (c Cell) GetValue(content any) string {
 		return c.Raw
 	}
 
-	buffer := bytes.NewBuffer(nil)
+	// Skip template execution for static content (no template delimiters)
+	if !strings.Contains(c.Raw, "{{") {
+		return c.Raw
+	}
 
-	err := c.Template.Execute(buffer, content)
+	buf := bufferPool.Get().(*bytes.Buffer)
+	buf.Reset()
+	defer bufferPool.Put(buf)
+
+	err := c.Template.Execute(buf, content)
 	if err != nil {
 		return c.Raw
 	}
 
-	return buffer.String()
+	return buf.String()
 }
 
 type Range struct {

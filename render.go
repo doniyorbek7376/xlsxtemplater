@@ -3,6 +3,7 @@ package xlsxtemplater
 import (
 	"bytes"
 	"fmt"
+	"sync"
 	"text/template"
 
 	"codeberg.org/tealeg/xlsx/v4"
@@ -81,19 +82,31 @@ func renderCondition(sheet *xlsx.Sheet, node *Condition, content any, templateFu
 	}
 }
 
+var (
+	conditionCache = make(map[string]*template.Template)
+	conditionMu    sync.Mutex
+)
+
 func checkCondition(expr string, content any, templateFunctions template.FuncMap) bool {
 	checkerTemplate := fmt.Sprintf("{{ %s }}", expr)
 
-	tmpl, err := template.New("checker").
-		Funcs(templateFunctions).
-		Parse(checkerTemplate)
-	if err != nil {
+	conditionMu.Lock()
+	tmpl, ok := conditionCache[checkerTemplate]
+	if !ok {
+		tmpl, _ = template.New("checker").
+			Funcs(templateFunctions).
+			Parse(checkerTemplate)
+		conditionCache[checkerTemplate] = tmpl
+	}
+	conditionMu.Unlock()
+
+	if tmpl == nil {
 		return false
 	}
 
 	buf := bytes.NewBuffer(nil)
 
-	err = tmpl.Execute(buf, content)
+	_ = tmpl.Execute(buf, content)
 
 	return buf.String() == "true"
 }
