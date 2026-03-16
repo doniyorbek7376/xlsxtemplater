@@ -27,7 +27,7 @@ func main() {
 		"items": items,
 	}
 
-	template, err := xlsxtemplater.ParseTemplate("template2.xlsx")
+	template, err := xlsxtemplater.ParseTemplate("template.xlsx")
 	if err != nil {
 		panic(err)
 	}

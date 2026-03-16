@@ -41,6 +41,8 @@ func (n *Sheet) render(sheet *xlsx.Sheet, content any, templateFunctions templat
 		sheet.Cols.Add(&newCol)
 	})
 
+	sheet.SheetViews = n.sheet.SheetViews
+
 	for _, node := range n.Nodes {
 		render(sheet, node, content, templateFunctions)
 	}
