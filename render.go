@@ -26,6 +26,10 @@ func (f *File) render(file *xlsx.File, content any, templateFunctions template.F
 }
 
 func (n *Sheet) render(sheet *xlsx.Sheet, content any, templateFunctions template.FuncMap) error {
+	for _, node := range n.Nodes {
+		render(sheet, node, content, templateFunctions)
+	}
+
 	// copy old sheet column
 	n.sheet.Cols.ForEach(func(idx int, col *xlsx.Col) {
 		newCol := xlsx.Col{}
@@ -42,10 +46,6 @@ func (n *Sheet) render(sheet *xlsx.Sheet, content any, templateFunctions templat
 	})
 
 	sheet.SheetViews = n.sheet.SheetViews
-
-	for _, node := range n.Nodes {
-		render(sheet, node, content, templateFunctions)
-	}
 
 	return nil
 }
@@ -139,6 +139,11 @@ func renderRow(sheet *xlsx.Sheet, row *Row, content any) {
 		newCell.Merge(newCell.HMerge, newCell.VMerge)
 
 		newCell.SetValue(cell.GetValue(content))
+
+		style := cell.cell.GetStyle()
+		if style != nil {
+			newCell.SetStyle(style)
+		}
 	}
 }
 
@@ -146,10 +151,6 @@ func cloneCell(to, from *xlsx.Cell) {
 	to.HMerge = from.HMerge
 	to.VMerge = from.VMerge
 	to.Hidden = from.Hidden
-	style := from.GetStyle()
-	if style != nil {
-		to.SetStyle(style)
-	}
 	to.Value = from.Value
 	to.SetFormula(from.Formula())
 	to.NumFmt = from.NumFmt
