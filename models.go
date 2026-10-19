@@ -70,6 +70,7 @@ type Cell struct {
 
 	Template *template.Template
 	cell     *xlsx.Cell
+	number   numberCell
 }
 
 func (c Cell) GetValue(content any) string {

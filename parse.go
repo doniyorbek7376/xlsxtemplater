@@ -155,9 +155,12 @@ func parseRow(row *xlsx.Row, rowIndex int, templateFunctions template.FuncMap) *
 		if strings.Contains(cell.Value, "{{") {
 			tmpl, err := template.New(cellName).
 				Funcs(templateFunctions).
+				Funcs(numberFunctions).
 				Parse(cell.Value)
 			if err != nil {
 				println("warning: cannot parse template: " + cellName + " " + err.Error())
+			} else {
+				cellNode.number = markNumberCell(tmpl, templateFunctions)
 			}
 
 			cellNode.Template = tmpl
