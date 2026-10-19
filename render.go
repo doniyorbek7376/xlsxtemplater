@@ -139,8 +139,8 @@ func renderRow(sheet *xlsx.Sheet, row *Row, content any) {
 		newCell.Merge(newCell.HMerge, newCell.VMerge)
 
 		value := cell.GetValue(content)
-		if number, ok := decodeNumber(value); ok {
-			newCell.SetFloatWithFormat(number, cell.numberFormat())
+		if number, formatted, ok := decodeNumber(value); ok {
+			newCell.SetFloatWithFormat(number, cell.numberFormat(formatted))
 		} else {
 			newCell.SetValue(value)
 		}

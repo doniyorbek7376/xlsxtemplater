@@ -12,47 +12,41 @@ import (
 
 type namedFloat float64
 
-func TestNumberRules(t *testing.T) {
+func TestPlainNumberValue(t *testing.T) {
 	tests := []struct {
-		name         string
-		value        any
-		want         float64
-		formatNumber bool
-		plain        bool
+		name  string
+		value any
+		want  float64
+		ok    bool
 	}{
-		{"integer", 1500000, 1500000, true, true},
-		{"decimal", 12345.67, 12345.67, true, true},
-		{"negative", -12.5, -12.5, true, true},
-		{"zero", 0, 0, true, true},
-		{"uint32", uint32(1234), 1234, true, true},
-		{"named float type", namedFloat(2.5), 2.5, true, true},
-		{"NaN", math.NaN(), 0, false, false},
-		{"Inf", math.Inf(1), 0, false, false},
-		{"string integer", "1234", 1234, true, true},
-		{"string negative", "-12.5", -12.5, true, true},
-		{"string zero", "0", 0, true, true},
-		{"string fraction", "0.5", 0.5, true, true},
-		{"string leading zeros", "0012", 12, true, false},
-		{"string 11 digits", "12345678901", 12345678901, true, true},
-		{"string 12 digits", "123456789012", 123456789012, true, false},
-		{"string localized", "1 234,50", 0, false, false},
-		{"string NaN", "NaN", 0, false, false},
-		{"string dash", "-", 0, false, false},
-		{"empty string", "", 0, false, false},
-		{"nil", nil, 0, false, false},
-		{"bool", true, 0, false, false},
+		{"integer", 1500000, 1500000, true},
+		{"decimal", 12345.67, 12345.67, true},
+		{"negative", -12.5, -12.5, true},
+		{"zero", 0, 0, true},
+		{"uint32", uint32(1234), 1234, true},
+		{"named float type", namedFloat(2.5), 2.5, true},
+		{"NaN", math.NaN(), 0, false},
+		{"Inf", math.Inf(1), 0, false},
+		{"string integer", "1234", 1234, true},
+		{"string negative", "-12.5", -12.5, true},
+		{"string zero", "0", 0, true},
+		{"string fraction", "0.5", 0.5, true},
+		{"string leading zeros", "0012", 12, false},
+		{"string 11 digits", "12345678901", 12345678901, true},
+		{"string 12 digits", "123456789012", 123456789012, false},
+		{"string localized", "1 234,50", 0, false},
+		{"string NaN", "NaN", 0, false},
+		{"string dash", "-", 0, false},
+		{"empty string", "", 0, false},
+		{"nil", nil, 0, false},
+		{"bool", true, 0, false},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, ok := formatNumberValue(tt.value)
-			if ok != tt.formatNumber || (ok && got != tt.want) {
-				t.Errorf("formatNumberValue(%#v) = %v, %v; want %v, %v", tt.value, got, ok, tt.want, tt.formatNumber)
-			}
-
-			got, ok = plainNumberValue(tt.value)
-			if ok != tt.plain || (ok && got != tt.want) {
-				t.Errorf("plainNumberValue(%#v) = %v, %v; want %v, %v", tt.value, got, ok, tt.want, tt.plain)
+			got, ok := plainNumberValue(tt.value)
+			if ok != tt.ok || (ok && got != tt.want) {
+				t.Errorf("plainNumberValue(%#v) = %v, %v; want %v, %v", tt.value, got, ok, tt.want, tt.ok)
 			}
 		})
 	}
@@ -106,12 +100,18 @@ func TestGenerateNumericCells(t *testing.T) {
 			wantNumFmt: "#,##0.00",
 		},
 		{
-			name:       "format_number with leading zeros",
-			cell:       templateCell{raw: "{{ .x | format_number }}"},
-			content:    map[string]any{"x": "0012"},
-			wantType:   xlsx.CellTypeNumeric,
-			wantValue:  "12",
-			wantNumFmt: "#,##0.00",
+			name:      "format_number with leading zeros stays text",
+			cell:      templateCell{raw: "{{ .x | format_number }}"},
+			content:   map[string]any{"x": "0012"},
+			wantType:  xlsx.CellTypeString,
+			wantValue: "0012",
+		},
+		{
+			name:      "format_number piped on prints formatted",
+			cell:      templateCell{raw: `{{ .x | format_number | printf "%v UZS" }}`},
+			content:   map[string]any{"x": 1234.5},
+			wantType:  xlsx.CellTypeString,
+			wantValue: "1 234,50 UZS",
 		},
 		{
 			name:      "format_number with a non-number stays text",

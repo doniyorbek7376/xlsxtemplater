@@ -160,7 +160,7 @@ func parseRow(row *xlsx.Row, rowIndex int, templateFunctions template.FuncMap) *
 			if err != nil {
 				println("warning: cannot parse template: " + cellName + " " + err.Error())
 			} else {
-				cellNode.number = markNumberCell(tmpl, templateFunctions)
+				markNumberCell(tmpl)
 			}
 
 			cellNode.Template = tmpl

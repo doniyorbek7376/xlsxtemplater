@@ -70,21 +70,17 @@ The `{{range}}`, `{{if}}`, `{{else}}`, and `{{end}}` directives are placed in a 
 ## Numbers
 
 A cell whose whole content is a single action is written as a numeric cell when
-its value is a number; otherwise it is text, as before. Text around the action
-(`Total: {{.Sum}}`) always gives a text cell.
+the pipeline's final value is a number; otherwise it is text, as before. Text
+around the action (`Total: {{.Sum}}`) always gives a text cell.
 
-- `{{.Price | format_number}}` / `{{format_number .Price}}`: numeric when the
-  argument of `format_number` is a Go number or any string `strconv.ParseFloat`
-  reads as a finite number (`"0012"` → `12`). The value is rounded to 2
-  decimals. The cell keeps its own number format, or gets `#,##0.00` when it is
-  General. A non-number is text, formatted as `"33 928,57"`.
-- `{{.Quantity}}`, `{{.Quantity | f}}`: numeric when the pipeline's value is a
-  Go number, or a decimal string without leading zeros of at most 11 digits
-  (`"1234"`, `"-12.5"`). `"0012"`, barcodes and other long digit strings stay
-  text. The value is not rounded and the cell keeps its own number format.
+A number is a Go number (any int, uint or float kind, named types included), or
+a decimal string without leading zeros of at most 11 digits (`"1234"`,
+`"-12.5"`). `"0012"`, barcodes and other long digit strings stay text. The cell
+keeps its own number format.
 
-A `format_number` replaced through `CustomFuncMap` is treated as any other
-function.
+`format_number` returns a number, rounded to 2 decimals, that prints as
+`"33 928,57"`; a cell holding only it gets `#,##0.00` when its number format is
+General. A value that is not a number is returned as text.
 
 ## Custom Functions
 

@@ -23,7 +23,7 @@ func getDefaultTemplateFunctions() template.FuncMap {
 		},
 		"format_date":   FormatDate,
 		"to_number":     parseFloat,
-		"format_number": FormatNumberForExcel,
+		"format_number": formatNumber,
 	}
 }
 

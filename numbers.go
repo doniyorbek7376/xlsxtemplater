@@ -10,23 +10,14 @@ import (
 	tparse "text/template/parse"
 )
 
-type numberCell int
-
 const (
-	numberCellNone numberCell = iota
-	// numberCellPlain is a cell holding a single action, e.g. {{ .x }}.
-	numberCellPlain
-	// numberCellFormatNumber is a cell holding a single action ending in format_number.
-	numberCellFormatNumber
-)
+	captureNumberFunc = "xlsxtemplater_capture_number"
 
-const (
-	plainNumberFunc  = "xlsxtemplater_plain_number"
-	formatNumberFunc = "xlsxtemplater_format_number"
-
-	// numberMarker prefixes the output of a number cell's template when the value
-	// is a number, so render can write a numeric cell. NUL never appears in xlsx text.
-	numberMarker = "\x00number:"
+	// numberMarker and formattedNumberMarker prefix the output of a cell's
+	// template when its value is a number, so render can write a numeric cell.
+	// NUL never appears in xlsx text.
+	numberMarker          = "\x00number:"
+	formattedNumberMarker = "\x00formatted_number:"
 
 	// formatNumberNumFmt is what format_number displays: grouped, 2 decimals.
 	formatNumberNumFmt = "#,##0.00"
@@ -39,93 +30,78 @@ const (
 var plainNumberRgx = regexp.MustCompile(`^-?(0|[1-9][0-9]*)(\.[0-9]+)?$`)
 
 var numberFunctions = template.FuncMap{
-	plainNumberFunc:  capturePlainNumber,
-	formatNumberFunc: captureFormatNumber,
+	captureNumberFunc: captureNumber,
 }
 
-// markNumberCell detects a cell whose whole content is a single action and
-// rewrites its pipeline so the template reports a number to render.
-func markNumberCell(tmpl *template.Template, templateFunctions template.FuncMap) numberCell {
-	nodes := tmpl.Tree.Root.Nodes
-	if len(nodes) != 1 {
-		return numberCellNone
-	}
+// formattedNumber is what format_number returns for a number. It prints as
+// "33 928,57"; a cell holding only it is a numeric cell shown with #,##0.00.
+type formattedNumber float64
 
-	action, ok := nodes[0].(*tparse.ActionNode)
-	if !ok || len(action.Pipe.Decl) > 0 {
-		return numberCellNone
-	}
-
-	last := action.Pipe.Cmds[len(action.Pipe.Cmds)-1]
-	if ident, ok := last.Args[0].(*tparse.IdentifierNode); ok &&
-		ident.Ident == "format_number" && isDefaultFormatNumber(templateFunctions["format_number"]) {
-		ident.Ident = formatNumberFunc
-
-		return numberCellFormatNumber
-	}
-
-	capture := tparse.NewIdentifier(plainNumberFunc).SetTree(tmpl.Tree).SetPos(last.Pos)
-	action.Pipe.Cmds = append(action.Pipe.Cmds, &tparse.CommandNode{
-		NodeType: tparse.NodeCommand,
-		Pos:      last.Pos,
-		Args:     []tparse.Node{capture},
-	})
-
-	return numberCellPlain
+func (n formattedNumber) String() string {
+	return FormatNumberForExcel(float64(n))
 }
 
-// isDefaultFormatNumber reports whether format_number was not replaced through
-// Options.CustomFuncMap: a custom one is treated as any other function.
-func isDefaultFormatNumber(fn any) bool {
-	return fn != nil && reflect.ValueOf(fn).Pointer() == reflect.ValueOf(FormatNumberForExcel).Pointer()
-}
-
-func capturePlainNumber(value any) any {
+// formatNumber is the format_number template function: a number, rounded to
+// 2 decimals, or the value printed as text when it is not a number.
+func formatNumber(value any) any {
 	if number, ok := plainNumberValue(value); ok {
-		return encodeNumber(number)
-	}
-
-	return value
-}
-
-func captureFormatNumber(value any) string {
-	if number, ok := formatNumberValue(value); ok {
-		return encodeNumber(math.Round(number*100) / 100)
+		return formattedNumber(math.Round(number*100) / 100)
 	}
 
 	return FormatNumberForExcel(value)
 }
 
-func encodeNumber(number float64) string {
-	return numberMarker + strconv.FormatFloat(number, 'g', -1, 64)
+// markNumberCell appends captureNumber to the pipeline of a cell whose whole
+// content is a single action, so the template reports a number to render.
+func markNumberCell(tmpl *template.Template) {
+	nodes := tmpl.Tree.Root.Nodes
+	if len(nodes) != 1 {
+		return
+	}
+
+	action, ok := nodes[0].(*tparse.ActionNode)
+	if !ok || len(action.Pipe.Decl) > 0 {
+		return
+	}
+
+	last := action.Pipe.Cmds[len(action.Pipe.Cmds)-1]
+	capture := tparse.NewIdentifier(captureNumberFunc).SetTree(tmpl.Tree).SetPos(last.Pos)
+	action.Pipe.Cmds = append(action.Pipe.Cmds, &tparse.CommandNode{
+		NodeType: tparse.NodeCommand,
+		Pos:      last.Pos,
+		Args:     []tparse.Node{capture},
+	})
 }
 
-func decodeNumber(text string) (float64, bool) {
-	encoded, ok := strings.CutPrefix(text, numberMarker)
-	if !ok {
-		return 0, false
+func captureNumber(value any) any {
+	if number, ok := value.(formattedNumber); ok {
+		return formattedNumberMarker + strconv.FormatFloat(float64(number), 'g', -1, 64)
+	}
+
+	if number, ok := plainNumberValue(value); ok {
+		return numberMarker + strconv.FormatFloat(number, 'g', -1, 64)
+	}
+
+	return value
+}
+
+// decodeNumber reads the output of a cell's template back as a number;
+// formatted tells a format_number value.
+func decodeNumber(text string) (number float64, formatted, ok bool) {
+	encoded, formatted := strings.CutPrefix(text, formattedNumberMarker)
+	if !formatted {
+		if encoded, ok = strings.CutPrefix(text, numberMarker); !ok {
+			return 0, false, false
+		}
 	}
 
 	number, err := strconv.ParseFloat(encoded, 64)
 
-	return number, err == nil
+	return number, formatted, err == nil
 }
 
-// formatNumberValue reads value as a number for a format_number cell: a Go
-// number, or any string strconv.ParseFloat reads, finite.
-func formatNumberValue(value any) (float64, bool) {
-	v := reflect.ValueOf(value)
-	if v.Kind() != reflect.String {
-		return numericValue(v)
-	}
-
-	number, err := strconv.ParseFloat(v.String(), 64)
-
-	return number, err == nil && isFinite(number)
-}
-
-// plainNumberValue reads value as a number for a plain cell: a Go number, or a
-// decimal string without leading zeros of at most maxPlainNumberDigits digits.
+// plainNumberValue reads value as a number: a Go number, or a decimal string
+// without leading zeros of at most maxPlainNumberDigits digits.
 func plainNumberValue(value any) (float64, bool) {
 	v := reflect.ValueOf(value)
 	if v.Kind() != reflect.String {
@@ -169,10 +145,10 @@ func isFinite(number float64) bool {
 }
 
 // numberFormat is the number format of a rendered number: the template cell's
-// own, or what format_number displays when a format_number cell is General.
-func (c Cell) numberFormat() string {
+// own, or what format_number displays when the cell is General.
+func (c Cell) numberFormat(formatted bool) string {
 	numFmt := c.cell.NumFmt
-	if c.number == numberCellFormatNumber && (numFmt == "" || strings.EqualFold(numFmt, "general")) {
+	if formatted && (numFmt == "" || strings.EqualFold(numFmt, "general")) {
 		return formatNumberNumFmt
 	}
 
